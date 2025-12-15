@@ -10,6 +10,14 @@ from evaluate import load
 import numpy as np
 import torch
 
+
+from transformers import pipeline
+classifier = pipeline("text-classification", model="yiyanghkust/finbert-tone")
+result = classifier("This restaurant service was terrible!")
+print(result)
+
+
+
 # 1. Load sentiment model & tokenizer (FinBERT tone, 3 classes)
 base_model_id = "yiyanghkust/finbert-tone"  # positive / negative / neutral
 tokenizer = AutoTokenizer.from_pretrained(base_model_id)
