@@ -1,86 +1,77 @@
-from datasets import load_dataset
-from transformers import (
-    AutoTokenizer,
-    AutoModelForSequenceClassification,
-    AutoConfig,
-    TrainingArguments,
-    Trainer,
-)
-from evaluate import load
-import numpy as np
+# app.py - FinBERT Sentiment Analysis Web App
+from flask import Flask, render_template, request, jsonify
+from transformers import pipeline, AutoTokenizer, AutoModelForSequenceClassification, AutoConfig
 import torch
+import re
+from collections import Counter
+import os
 
-# 1. Load sentiment model & tokenizer (FinBERT tone, 3 classes)
-base_model_id = "yiyanghkust/finbert-tone"  # positive / negative / neutral
-tokenizer = AutoTokenizer.from_pretrained(base_model_id)
+app = Flask(__name__)
 
-# (Optional) If you really want 3 classes, keep num_labels=3
-config = AutoConfig.from_pretrained(base_model_id)
-config.num_labels = 3
-model = AutoModelForSequenceClassification.from_pretrained(
-    base_model_id,
-    config=config,
-    ignore_mismatched_sizes=True,
-)
+# Load FinBERT model (3-class: negative/neutral/positive)
+model_id = "yiyanghkust/finbert-tone"
+tokenizer = AutoTokenizer.from_pretrained(model_id)
+config = AutoConfig.from_pretrained(model_id, num_labels=3)
+model = AutoModelForSequenceClassification.from_pretrained(model_id, config=config, ignore_mismatched_sizes=True)
+classifier = pipeline("text-classification", model=model, tokenizer=tokenizer, return_all_scores=True)
 
-# 2. Load Yelp dataset and map 5 stars -> 3 sentiment classes
-raw = load_dataset("yelp_review_full")  # splits: train, test
+# Star-to-sentiment mapping (for Yelp-style input)
+STAR_MAPPING = {1: 0, 2: 1, 3: 2, 4: 2, 5: 2}  # neg/neut/pos
 
-def map_to_3classes(example):
-    star = example["label"]  # 0..4 (1..5 stars)
-    if star <= 1:
-        return {"label": 0}  # negative
-    elif star == 2:
-        return {"label": 1}  # neutral
-    else:
-        return {"label": 2}  # positive
+@app.route('/')
+def index():
+    return render_template('index.html')
 
-raw = raw.map(map_to_3classes)
+@app.route('/predict', methods=['POST'])
+def predict():
+    data = request.json
+    text = data.get('text', '').strip()
+    
+    if not text:
+        return jsonify({'error': 'Please enter text'}), 400
+    
+    # Get predictions
+    predictions = classifier(text)
+    
+    # Format results
+    scores = {pred['label']: round(pred['score'] * 100, 1) for pred in predictions[0]}
+    top_pred = max(scores, key=scores.get)
+    
+    # Sentiment labels
+    labels = {0: 'Negative', 1: 'Neutral', 2: 'Positive'}
+    
+    return jsonify({
+        'prediction': labels[int(top_pred.split('_')[-1])],
+        'confidence': scores[top_pred],
+        'scores': {
+            'Negative': scores.get('LABEL_0', 0),
+            'Neutral': scores.get('LABEL_1', 0), 
+            'Positive': scores.get('LABEL_2', 0)
+        },
+        'text': text[:100] + '...' if len(text) > 100 else text
+    })
 
-# 3. Tokenize
-def tokenize_function(examples):
-    return tokenizer(
-        examples["text"],
-        truncation=True,
-        padding="max_length",
-        max_length=128,
-    )
+@app.route('/batch_predict', methods=['POST'])
+def batch_predict():
+    data = request.json
+    texts = data.get('texts', [])
+    
+    if not texts:
+        return jsonify({'error': 'No texts provided'}), 400
+    
+    results = []
+    for text in texts[:10]:  # Limit to 10 for demo
+        if text.strip():
+            preds = classifier(text.strip())
+            top_pred = max(preds[0], key=lambda x: x['score'])
+            results.append({
+                'text': text[:50] + '...' if len(text) > 50 else text,
+                'sentiment': top_pred['label'].split('_')[-1],
+                'confidence': round(top_pred['score'] * 100, 1)
+            })
+    
+    return jsonify({'results': results})
 
-tokenized_datasets = raw.map(tokenize_function, batched=True)
-tokenized_datasets = tokenized_datasets.rename_column("label", "labels")
-# keep "text" if you want, but Trainer only needs tensors
-# tokenized_datasets = tokenized_datasets.remove_columns(["text"])
-
-tokenized_datasets.set_format(
-    type="torch",
-    columns=["input_ids", "attention_mask", "labels"],
-)
-
-small_train_dataset = tokenized_datasets["train"].shuffle(seed=42).select(range(1000))
-small_test_dataset = tokenized_datasets["test"].shuffle(seed=42).select(range(1000))
-
-# 4. Metric
-metric = load("accuracy")
-
-def compute_metrics(eval_pred):
-    logits, labels = eval_pred
-    predictions = np.argmax(logits, axis=-1)
-    return metric.compute(predictions=predictions, references=labels)
-
-# 5. Training arguments (sentiment + epochs)
-training_args = TrainingArguments(
-    output_dir="test_trainer",
-    num_train_epochs=3,
-    eval_strategy="epoch",   # if your version supports eval_strategy
-)
-
-# 6. Trainer
-trainer = Trainer(
-    model=model,
-    args=training_args,
-    train_dataset=small_train_dataset,
-    eval_dataset=small_test_dataset,
-    compute_metrics=compute_metrics,
-)
-
-trainer.train()
+if __name__ == '__main__':
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port, debug=True)
