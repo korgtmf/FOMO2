@@ -2,9 +2,9 @@
 import streamlit as st
 import re
 
-st.set_page_config(page_title="Sentiment & Topic Analyzer", page_icon="😊", layout="wide")
+st.set_page_config(page_title="Financial Opinion Monitoring Optimizer", page_icon="😊", layout="wide")
 
-st.title("😊 Sentiment & Topic Analyzer")
+st.title("😊 Financial Opinion Monitoring Optimizer")
 st.markdown("**Zero dependencies – sentiment + topic matching.**")
 
 # ---------- Sentiment Analysis (rule-based) ----------
@@ -130,7 +130,7 @@ text = st.text_area(
     key="text"
 )
 
-if st.button("🔍 Analyze Sentiment & Topic", type="primary", use_container_width=True) and text.strip():
+if st.button("🔍 Financial Opinion Monitoring Optimizer", type="primary", use_container_width=True) and text.strip():
     sent_label, sent_conf, hits_pos, hits_neg = analyze_sentiment(text)
     topic_label, topic_relevance, topic_hits = match_topics(text)
 
