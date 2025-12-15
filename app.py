@@ -1,20 +1,14 @@
-import streamlit as st
-import os
 from huggingface_hub import login
-from transformers import pipeline
-import torch
 
 @st.cache_resource
 def load_model():
-    os.environ["HF_TOKEN"] = st.secrets.get("HF_TOKEN", "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")
-    login(token=os.environ["HF_TOKEN"])
-    
-    pipe = pipeline(
-        "text-classification",
-        model="korgtmf/FOMO",
-        device=0 if torch.cuda.is_available() else -1
-    )
-    return pipe
+    hf_token = os.environ.get("HF_TOKEN")  # populated from Streamlit secrets
+    if not hf_token:
+        raise ValueError("HF_TOKEN not set in environment / secrets")
 
-pipe = load_model()
-st.write("Model loaded successfully")
+    login(token=hf_token)
+
+    model_id = "korgtmf/FOMO"
+    tokenizer = AutoTokenizer.from_pretrained(model_id, token=hf_token)
+    model = AutoModelForSequenceClassification.from_pretrained(model_id, token=hf_token)
+    return tokenizer, model
