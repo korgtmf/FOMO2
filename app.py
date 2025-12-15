@@ -6,7 +6,7 @@ import torch
 
 @st.cache_resource
 def load_model():
-    os.environ["HF_TOKEN"] = st.secrets.get("HF_TOKEN", "your_token_here")
+    os.environ["HF_TOKEN"] = st.secrets.get("HF_TOKEN", "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")
     login(token=os.environ["HF_TOKEN"])
     
     pipe = pipeline(
