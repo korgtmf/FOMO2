@@ -5,7 +5,7 @@ import re
 st.set_page_config(page_title="Financial Opinion Monitoring Optimizer", page_icon="😊", layout="wide")
 
 st.title("😊 Financial Opinion Monitoring Optimizer")
-st.markdown("**Zero dependencies – sentiment + topic matching.**")
+st.markdown("**Zero dependencies – Financial Opinion Monitoring Optimizer.**")
 
 # ---------- Sentiment Analysis (rule-based) ----------
 def analyze_sentiment(text: str):
